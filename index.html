@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Video Clipper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for drag-over effect */
+        .drag-over {
+            border-color: #4f46e5;
+            background-color: #e0e7ff;
+        }
+        /* Custom scrollbar for timeline */
+        #timeline-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #timeline-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        #timeline-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        #timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900">Cloud Video Clipper</h1>
+            <p class="text-slate-600 mt-2">Upload your video and Sportscode XML to generate clips automatically.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Video and Actions -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Video Drop Zone -->
+                <div id="video-drop-zone" class="w-full aspect-video bg-slate-900 rounded-lg shadow-lg flex flex-col justify-center items-center text-white p-6 border-4 border-dashed border-slate-700 hover:border-indigo-500 transition-all duration-300 cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-slate-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.55a1.5 1.5 0 01.45 1.08V19a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h8.92a1.5 1.5 0 011.08.45L15 10z" />
+                    </svg>
+                    <p class="font-semibold text-xl">Drag & Drop Video File Here</p>
+                    <p class="text-slate-400">or click to select a file</p>
+                    <input type="file" id="video-input" class="hidden" accept="video/*">
+                    <p id="video-status" class="mt-4 text-lg font-medium text-green-400"></p>
+                </div>
+
+                <!-- Action Center -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4 text-slate-800">Processing Controls</h3>
+                     <div class="flex items-center justify-center">
+                        <button id="process-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all duration-300" disabled>
+                            Process Clips
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: XML and Timeline -->
+            <div class="space-y-8">
+                <!-- XML Drop Zone -->
+                <div id="xml-drop-zone" class="bg-white p-6 rounded-lg shadow-md flex flex-col justify-center items-center text-center border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-all duration-300 cursor-pointer h-40">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <p class="font-semibold">Drag & Drop XML File</p>
+                    <p class="text-sm text-slate-500">or click to select</p>
+                    <input type="file" id="xml-input" class="hidden" accept=".xml,text/xml">
+                    <p id="xml-status" class="mt-2 text-sm font-medium text-green-500"></p>
+                </div>
+
+                <!-- Timeline Display -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-xl font-semibold mb-4 text-slate-800">Timeline Instances</h3>
+                    <div id="timeline-container" class="h-[calc(100vh-28rem)] max-h-[600px] overflow-y-auto pr-2 space-y-3">
+                        <!-- Timeline items will be injected here by JavaScript -->
+                        <div id="timeline-placeholder" class="text-center text-slate-500 py-10">
+                            <p>Awaiting XML file to display instances...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Output Log -->
+        <footer class="mt-8 bg-white p-6 rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold mb-4 text-slate-800">Output Log</h3>
+            <div id="output-log" class="h-32 bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-md overflow-y-auto">
+                <p>> Initialized. Waiting for files...</p>
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const videoDropZone = document.getElementById('video-drop-zone');
+        const videoInput = document.getElementById('video-input');
+        const videoStatus = document.getElementById('video-status');
+
+        const xmlDropZone = document.getElementById('xml-drop-zone');
+        const xmlInput = document.getElementById('xml-input');
+        const xmlStatus = document.getElementById('xml-status');
+
+        const processButton = document.getElementById('process-button');
+        const timelineContainer = document.getElementById('timeline-container');
+        const timelinePlaceholder = document.getElementById('timeline-placeholder');
+        const outputLog = document.getElementById('output-log');
+
+        // --- State Management ---
+        let videoFile = null;
+        let xmlDoc = null;
+
+        // --- Utility Functions ---
+        function updateButtonState() {
+            processButton.disabled = !(videoFile && xmlDoc);
+        }
+
+        function logMessage(message, isError = false) {
+            const p = document.createElement('p');
+            p.textContent = `> ${message}`;
+            if (isError) {
+                p.classList.add('text-red-400');
+            }
+            outputLog.appendChild(p);
+            outputLog.scrollTop = outputLog.scrollHeight; // Auto-scroll to bottom
+        }
+
+        // --- Drag and Drop Event Handlers ---
+        function setupDropZone(zone, input, handler) {
+            zone.addEventListener('click', () => input.click());
+            
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            });
+
+            zone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    input.files = files;
+                    const event = new Event('change', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
+            });
+
+            input.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    handler(e.target.files[0]);
+                }
+            });
+        }
+
+        // --- File Handlers ---
+        function handleVideoFile(file) {
+            videoFile = file;
+            videoStatus.textContent = `Loaded: ${file.name}`;
+            logMessage(`Video file "${file.name}" loaded.`);
+            updateButtonState();
+        }
+
+        function handleXmlFile(file) {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const buffer = e.target.result; // this is an ArrayBuffer
+                let decodedString;
+
+                // FIX: Intelligently detect encoding based on Byte Order Mark (BOM)
+                // This handles UTF-16 LE, UTF-16 BE, and UTF-8 files correctly.
+                const dataView = new DataView(buffer);
+                if (buffer.byteLength >= 2) {
+                    const bom = dataView.getUint16(0);
+                    if (bom === 0xFFFE) { // Little-Endian UTF-16
+                        logMessage("Detected UTF-16 LE encoding.");
+                        decodedString = new TextDecoder('utf-16le').decode(buffer);
+                    } else if (bom === 0xFEFF) { // Big-Endian UTF-16
+                        logMessage("Detected UTF-16 BE encoding.");
+                        decodedString = new TextDecoder('utf-16be').decode(buffer);
+                    } else {
+                        // Default to UTF-8 if no UTF-16 BOM is found
+                        logMessage("No UTF-16 BOM detected, assuming UTF-8.");
+                        decodedString = new TextDecoder('utf-8').decode(buffer);
+                    }
+                } else {
+                    // Default for very small files
+                    decodedString = new TextDecoder('utf-8').decode(buffer);
+                }
+
+                // The BOM might still be present as the first character (\uFEFF) after decoding.
+                // This removes it to prevent the parser from failing.
+                if (decodedString.charCodeAt(0) === 0xFEFF) {
+                    decodedString = decodedString.substring(1);
+                }
+
+                const parser = new DOMParser();
+                const parsedXml = parser.parseFromString(decodedString, "application/xml");
+                
+                const parseError = parsedXml.querySelector("parsererror");
+                if (parseError) {
+                    xmlDoc = null;
+                    console.error("XML Parse Error:", parseError.textContent);
+                    logMessage(`Error: Failed to parse XML file. Check console for details.`, true);
+                    alert("Failed to parse XML file. It might be malformed. Please check the browser's console for more details.");
+                } else {
+                    xmlDoc = parsedXml;
+                    xmlStatus.textContent = `Loaded: ${file.name}`;
+                    logMessage(`XML file "${file.name}" loaded and parsed successfully.`);
+                    renderTimeline(xmlDoc);
+                }
+                updateButtonState();
+            };
+
+            reader.onerror = () => {
+                xmlDoc = null;
+                logMessage(`Error reading file: ${file.name}`, true);
+                alert("Error reading the XML file.");
+                updateButtonState();
+            };
+
+            // Read the file as an ArrayBuffer to let the logic above handle encoding.
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- Timeline Rendering ---
+        function renderTimeline(xml) {
+            // Clear existing timeline
+            timelineContainer.innerHTML = '';
+
+            // IMPORTANT: This assumes a specific XML structure from Sportscode.
+            // You may need to adjust the selectors ('instance', 'start', 'end', 'label text')
+            // to match your exact XML file format.
+            //
+            // Assumed structure:
+            // <ALL_INSTANCES>
+            //   <instance>
+            //     <ID>...</ID>
+            //     <start>45.5</start>
+            //     <end>55.2</end>
+            //     <label>
+            //       <text>Turnover</text>
+            //     </label>
+            //   </instance>
+            //   ...
+            // </ALL_INSTANCES>
+            
+            const instances = xml.querySelectorAll('instance');
+
+            if (instances.length === 0) {
+                timelineContainer.appendChild(timelinePlaceholder);
+                timelinePlaceholder.textContent = 'No instances found in the XML file.';
+                logMessage('XML parsed, but no <instance> tags were found.');
+                return;
+            }
+
+            logMessage(`Found ${instances.length} instances. Rendering timeline.`);
+
+            instances.forEach((inst, index) => {
+                const startNode = inst.querySelector('start');
+                const endNode = inst.querySelector('end');
+                const labelNode = inst.querySelector('label text'); // Look for text inside a label tag
+
+                const start = startNode ? parseFloat(startNode.textContent).toFixed(2) : 'N/A';
+                const end = endNode ? parseFloat(endNode.textContent).toFixed(2) : 'N/A';
+                const label = labelNode ? labelNode.textContent : `Instance ${index + 1}`;
+                const duration = (start !== 'N/A' && end !== 'N/A') ? (end - start).toFixed(2) : 'N/A';
+
+                const instanceElement = document.createElement('div');
+                instanceElement.className = 'bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200';
+                
+                instanceElement.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <p class="font-semibold text-slate-800 truncate">${label}</p>
+                        <span class="text-xs font-mono bg-slate-200 text-slate-600 px-2 py-1 rounded-full">${duration}s</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-2 text-sm text-slate-500">
+                        <span>Start: ${start}s</span>
+                        <span>End: ${end}s</span>
+                    </div>
+                `;
+                timelineContainer.appendChild(instanceElement);
+            });
+        }
+
+        // --- Main Execution ---
+        setupDropZone(videoDropZone, videoInput, handleVideoFile);
+        setupDropZone(xmlDropZone, xmlInput, handleXmlFile);
+
+        processButton.addEventListener('click', () => {
+            if (!videoFile || !xmlDoc) {
+                alert("Please make sure both a video and a valid XML file are loaded.");
+                return;
+            }
+            logMessage("--- Starting Process (Placeholder) ---");
+            logMessage("Next steps: Upload files to Google Cloud Storage and trigger Cloud Function.");
+            // In a real application, this is where you would start the
+            // upload process to your Google Cloud Storage bucket.
+        });
+
+    </script>
+</body>
+</html>
